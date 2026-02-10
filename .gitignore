@@ -7,4 +7,5 @@ dist/
 *.log
 .turbo/
 coverage/
-.vite/
+*/plans/
+.claude

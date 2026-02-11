@@ -1,10 +1,17 @@
 import { createMiddleware } from "hono/factory";
+import { getCookie } from "hono/cookie";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 import type { Context } from "hono";
 import { UserService } from "../services/user.service.js";
 
+// Validate SUPABASE_URL at module load
+const SUPABASE_URL = process.env.SUPABASE_URL;
+if (!SUPABASE_URL) {
+  throw new Error("SUPABASE_URL environment variable is required");
+}
+
 // Supabase JWKS URL for JWT verification
-const SUPABASE_JWKS_URL = `${process.env.SUPABASE_URL ?? ""}/.well-known/jwks.json`;
+const SUPABASE_JWKS_URL = `${SUPABASE_URL}/.well-known/jwks.json`;
 
 export interface AuthContext {
   userId: string;
@@ -30,13 +37,10 @@ function getJWKS() {
  * 2. Authorization header (Bearer token)
  */
 function extractToken(c: Context): string | null {
-  // Check cookie first
-  const cookie = c.req.header("cookie");
-  if (cookie) {
-    const match = cookie.match(/auth-token=([^;]+)/);
-    if (match?.[1]) {
-      return decodeURIComponent(match[1]);
-    }
+  // Check cookie first (using Hono's getCookie)
+  const cookieToken = getCookie(c, "auth-token");
+  if (cookieToken) {
+    return cookieToken;
   }
 
   // Check Authorization header
@@ -64,7 +68,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
       token,
       getJWKS(),
       {
-        issuer: process.env.SUPABASE_URL,
+        issuer: SUPABASE_URL,
         audience: "authenticated",
       }
     );
@@ -111,7 +115,7 @@ export const optionalAuthMiddleware = createMiddleware(async (c, next) => {
 
   try {
     const { payload } = await jwtVerify(token, getJWKS(), {
-      issuer: process.env.SUPABASE_URL,
+      issuer: SUPABASE_URL,
       audience: "authenticated",
     });
 

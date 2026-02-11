@@ -1,8 +1,10 @@
 import { Hono } from "hono";
+import { setCookie } from "hono/cookie";
 import { zValidator } from "@hono/zod-validator";
 import { loginSchema, signupSchema } from "@substrack/shared";
 import { supabase } from "../lib/supabase.js";
 import { UserService } from "../services/user.service.js";
+import { authMiddleware } from "../middleware/auth.js";
 
 const auth = new Hono();
 
@@ -58,14 +60,12 @@ auth.post("/signup", zValidator("json", signupSchema), async (c) => {
 
     // Get session for the token
     const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token ?? authData.session?.access_token;
+    const session = sessionData.session ?? authData.session;
+    const token = session?.access_token;
+    const refreshToken = session?.refresh_token;
 
     if (token) {
-      // Set HTTP-only cookie
-      c.header(
-        "Set-Cookie",
-        `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Max-Age=${COOKIE_OPTIONS.maxAge}; Path=${COOKIE_OPTIONS.path}; SameSite=${COOKIE_OPTIONS.sameSite}${COOKIE_OPTIONS.secure ? "; Secure" : ""}`
-      );
+      setCookie(c, COOKIE_NAME, token, COOKIE_OPTIONS);
     }
 
     return c.json(
@@ -81,6 +81,7 @@ auth.post("/signup", zValidator("json", signupSchema), async (c) => {
             updatedAt: user.updatedAt,
           },
           token: token ?? "",
+          refreshToken: refreshToken ?? "",
         },
       },
       201
@@ -131,12 +132,10 @@ auth.post("/login", zValidator("json", loginSchema), async (c) => {
     });
 
     const token = authData.session.access_token;
+    const refreshToken = authData.session.refresh_token;
 
     // Set HTTP-only cookie
-    c.header(
-      "Set-Cookie",
-      `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Max-Age=${COOKIE_OPTIONS.maxAge}; Path=${COOKIE_OPTIONS.path}; SameSite=${COOKIE_OPTIONS.sameSite}${COOKIE_OPTIONS.secure ? "; Secure" : ""}`
-    );
+    setCookie(c, COOKIE_NAME, token, COOKIE_OPTIONS);
 
     return c.json({
       success: true,
@@ -150,6 +149,7 @@ auth.post("/login", zValidator("json", loginSchema), async (c) => {
           updatedAt: user.updatedAt,
         },
         token,
+        refreshToken,
       },
     });
   } catch (error) {
@@ -167,11 +167,8 @@ auth.post("/login", zValidator("json", loginSchema), async (c) => {
  */
 auth.post("/logout", async (c) => {
   try {
-    // Clear the cookie
-    c.header(
-      "Set-Cookie",
-      `${COOKIE_NAME}=; HttpOnly; Max-Age=0; Path=${COOKIE_OPTIONS.path}; SameSite=${COOKIE_OPTIONS.sameSite}${COOKIE_OPTIONS.secure ? "; Secure" : ""}`
-    );
+    // Clear the cookie by setting maxAge to 0
+    setCookie(c, COOKIE_NAME, "", { ...COOKIE_OPTIONS, maxAge: 0 });
 
     // Sign out from Supabase (this also invalidates the session on Supabase side)
     await supabase.auth.signOut();
@@ -193,12 +190,8 @@ auth.post("/logout", async (c) => {
  * GET /api/auth/me
  * Get current authenticated user
  */
-auth.get("/me", async (c) => {
-  const auth = c.get("auth");
-
-  if (!auth) {
-    return c.json({ success: false, error: "Unauthorized" }, 401);
-  }
+auth.get("/me", authMiddleware, async (c) => {
+  const auth = c.get("auth")!;
 
   const user = await UserService.getUserById(auth.userId);
 

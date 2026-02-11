@@ -60,21 +60,23 @@ export class UserService {
       return existing;
     }
 
-    // Create new user
-    const [result] = await db
+    // Insert with ON CONFLICT to handle race conditions
+    await db
       .insert(users)
       .values({
         supabaseId: input.supabaseId,
         email: input.email,
         name: input.name ?? null,
       })
-      .returning();
+      .onConflictDoNothing({ target: users.supabaseId });
 
-    if (!result) {
+    // Re-query to get the user (handles both insert and conflict cases)
+    const user = await this.getUserBySupabaseId(input.supabaseId);
+    if (!user) {
       throw new Error("Failed to create user");
     }
 
-    return this.mapToUserData(result);
+    return user;
   }
 
   /**

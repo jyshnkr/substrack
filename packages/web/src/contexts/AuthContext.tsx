@@ -75,12 +75,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email, password }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+    } catch {
+      throw new Error("Network error — please check your connection and try again");
+    }
 
     const result = await response.json();
 
@@ -88,22 +93,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(result.error ?? "Login failed");
     }
 
-    // Set Supabase session
+    // Set Supabase session with both tokens
     await supabase.auth.setSession({
       access_token: result.data.token,
-      refresh_token: "",
+      refresh_token: result.data.refreshToken,
     });
 
     setUser(result.data.user);
   }, []);
 
   const signup = useCallback(async (email: string, password: string, name?: string) => {
-    const response = await fetch(`${API_URL}/api/auth/signup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email, password, name }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/api/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password, name }),
+      });
+    } catch {
+      throw new Error("Network error — please check your connection and try again");
+    }
 
     const result = await response.json();
 
@@ -111,21 +121,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(result.error ?? "Signup failed");
     }
 
-    // Set Supabase session
+    // Set Supabase session with both tokens
     await supabase.auth.setSession({
       access_token: result.data.token,
-      refresh_token: "",
+      refresh_token: result.data.refreshToken,
     });
 
     setUser(result.data.user);
   }, []);
 
   const logout = useCallback(async () => {
-    await fetch(`${API_URL}/api/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-    });
+    try {
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.error("Logout API call failed:", error);
+    }
 
+    // Always clear local state regardless of API call result
     await supabase.auth.signOut();
     setUser(null);
   }, []);

@@ -218,8 +218,8 @@ export const createSubscriptionSchema = z.object({
   billingCycle: billingCycleSchema,
   category: subscriptionCategorySchema,
   status: subscriptionStatusSchema.default("active"),
-  nextBillingDate: z.string().datetime().nullable().optional(),
-  startDate: z.string().datetime().nullable().optional(),
+  nextBillingDate: z.string().date().nullable().optional(),
+  startDate: z.string().date().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
 });
 

@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { healthRoute } from "./routes/health.js";
+import { auth } from "./routes/auth.js";
+// Auth middleware will be used for protected routes in future phases
 
 const app = new Hono();
 
@@ -16,7 +18,14 @@ app.use(
 );
 
 // Routes
-const routes = app.route("/", healthRoute);
+const routes = app
+  .route("/", healthRoute)
+  .route("/api/auth", auth);
+
+// Protected routes example (for future use):
+// app.use("/api/subscriptions/*", authMiddleware);
+// app.use("/api/connections/*", authMiddleware);
+// app.use("/api/alerts/*", authMiddleware);
 
 export { app };
 
